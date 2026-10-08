@@ -1,0 +1,26 @@
+[project]
+name = "techblog"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Himanshu Shukla", email = "himanshu.shukla55@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi[standard]>=0.142.2",
+    "psycopg>=3.3.6",
+    "python-dotenv>=1.2.4",
+    "sqlmodel>=0.0.47",
+]
+
+[tool.fastapi]
+entrypoint = "techblog.main:app"
+
+[project.scripts]
+techblog = "techblog:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
