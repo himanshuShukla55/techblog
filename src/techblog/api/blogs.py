@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import func, select
 
 from ..db import SessionDep
 from ..models.blogs import Blog, BlogResponse, CreateBlog, UpdateBlog
@@ -85,3 +86,23 @@ def delete_blog(
 
     session.delete(blog)
     session.commit()
+
+
+@blogs_router.get("/")
+def get_blogs(
+    session: SessionDep,
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    statement = select(Blog).limit(limit).offset(offset)
+    blogs = session.exec(statement).all()
+
+    total = session.exec(select(func.count()).select_from(Blog)).one()
+
+    return {
+        "items": blogs,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(blogs) < total,
+    }
