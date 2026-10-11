@@ -138,4 +138,19 @@ def add_likes(session: SessionDep, blog_id: UUID, user_id: UUID = Header(...)):
             status_code=status.HTTP_409_CONFLICT,
             detail="user cannot like the same blog twice!",
         )
-    
+
+
+@blogs_router.get("/{blog_id}/likes")
+def get_likes_on_blog(session: SessionDep, blog_id: UUID):
+    blog = session.get(Blog, blog_id)
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
+        )
+
+    statement = select(Like.user_id, Like.created_at).where(Like.blog_id == blog_id)
+    likes = session.exec(statement).all()
+    return [
+        {"user_id": user_id, "created_at": created_at} for user_id, created_at in likes
+    ]
