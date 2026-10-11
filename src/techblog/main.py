@@ -3,6 +3,7 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import text
 
 from .api.blogs import blogs_router
+from .api.likes import likes_router
 from .api.users import users_router
 from .db import SessionDep
 
@@ -27,3 +28,4 @@ def get_db_health(
 
 app.include_router(users_router)
 app.include_router(blogs_router)
+app.include_router(likes_router)
