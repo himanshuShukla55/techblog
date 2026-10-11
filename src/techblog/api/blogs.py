@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import func, select
 
 from ..db import SessionDep
@@ -154,3 +154,29 @@ def get_likes_on_blog(session: SessionDep, blog_id: UUID):
     return [
         {"user_id": user_id, "created_at": created_at} for user_id, created_at in likes
     ]
+
+
+@blogs_router.delete("/{blog_id}/like", status_code=status.HTTP_204_NO_CONTENT)
+def remove_like_on_blog(
+    session: SessionDep, blog_id: UUID, user_id: UUID = Header(...)
+):
+    try:
+        blog = session.get(Blog, blog_id)
+
+        if not blog:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
+            )
+
+        statement = select(Like).where(Like.blog_id == blog_id, Like.user_id == user_id)
+
+        like = session.exec(statement).one()
+
+        session.delete(like)
+        session.commit()
+    except NoResultFound as _:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="no like by user found on blog!",
+        )
