@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -11,9 +12,11 @@ from ..models.users import User
 
 likes_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
+RequestHeader = Annotated[UUID, Header()]
+
 
 @likes_router.post("/{blog_id}/like", response_model=LikeResponse)
-def add_likes(session: SessionDep, blog_id: UUID, user_id: UUID = Header(...)):
+def add_likes(session: SessionDep, blog_id: UUID, user_id: RequestHeader):
     try:
         user = session.get(User, user_id)
 
@@ -59,9 +62,7 @@ def get_likes_on_blog(session: SessionDep, blog_id: UUID):
 
 
 @likes_router.delete("/{blog_id}/like", status_code=status.HTTP_204_NO_CONTENT)
-def remove_like_on_blog(
-    session: SessionDep, blog_id: UUID, user_id: UUID = Header(...)
-):
+def remove_like_on_blog(session: SessionDep, blog_id: UUID, user_id: RequestHeader):
     try:
         blog = session.get(Blog, blog_id)
 
@@ -95,7 +96,4 @@ def get_likes_count_on_blog(session: SessionDep, blog_id: UUID):
 
     db_query = select(func.count()).select_from(Like).where(Like.blog_id == blog_id)
     count = session.exec(db_query).one()
-    return {
-        "blog_id": blog_id,
-        "likes": count
-    }
+    return {"blog_id": blog_id, "likes": count}

@@ -42,3 +42,7 @@ class BlogResponse(Blog):
 class UpdateBlog(SQLModel):
     title: str | None = Field(default=None, max_length=100)
     body: str | None = Field(default=None, max_length=1000)
+
+
+class BlogWithLikesResponse(BlogResponse):
+    likes: int = Field(default=0)

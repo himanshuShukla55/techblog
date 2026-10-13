@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
@@ -5,10 +6,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
 from ..db import SessionDep
-from ..models.blogs import Blog, BlogResponse, CreateBlog, UpdateBlog
+from ..models.blogs import (
+    Blog,
+    BlogResponse,
+    BlogWithLikesResponse,
+    CreateBlog,
+    UpdateBlog,
+)
+from ..models.likes import Like
 
 blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
+RequestHeader = Annotated[UUID, Header()]
 
 @blogs_router.post("/{author_id}", response_model=BlogResponse)
 def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
@@ -25,7 +34,7 @@ def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
         )
 
 
-@blogs_router.get("/{blog_id}", response_model=BlogResponse)
+@blogs_router.get("/{blog_id}", response_model=BlogWithLikesResponse)
 def get_blog(session: SessionDep, blog_id: UUID):
     blog = session.get(Blog, blog_id)
 
@@ -34,7 +43,11 @@ def get_blog(session: SessionDep, blog_id: UUID):
             status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
         )
 
-    return blog
+    statement = (
+        select(func.count()).select_from(Like).where(Like.blog_id == blog.id)
+    )
+    likes = session.exec(statement).one()
+    return BlogWithLikesResponse(**blog.model_dump(), likes=likes)
 
 
 @blogs_router.patch("/{blog_id}", response_model=BlogResponse)
@@ -42,7 +55,7 @@ def update_blog(
     session: SessionDep,
     data: UpdateBlog,
     blog_id: UUID,
-    author_id: UUID | None = Header(default=None),
+    author_id: RequestHeader,
 ):
     blog = session.get(Blog, blog_id)
 
@@ -69,7 +82,7 @@ def update_blog(
 
 @blogs_router.delete("/{blog_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_blog(
-    session: SessionDep, blog_id: UUID, author_id: UUID | None = Header(default=None)
+    session: SessionDep, blog_id: UUID, author_id: RequestHeader
 ):
     blog = session.get(Blog, blog_id)
 
