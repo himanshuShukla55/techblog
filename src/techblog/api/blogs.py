@@ -19,6 +19,7 @@ blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
 RequestHeader = Annotated[UUID, Header()]
 
+
 @blogs_router.post("/{author_id}", response_model=BlogResponse)
 def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
     try:
@@ -43,9 +44,7 @@ def get_blog(session: SessionDep, blog_id: UUID):
             status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
         )
 
-    statement = (
-        select(func.count()).select_from(Like).where(Like.blog_id == blog.id)
-    )
+    statement = select(func.count()).select_from(Like).where(Like.blog_id == blog.id)
     likes = session.exec(statement).one()
     return BlogWithLikesResponse(**blog.model_dump(), likes=likes)
 
@@ -81,9 +80,7 @@ def update_blog(
 
 
 @blogs_router.delete("/{blog_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_blog(
-    session: SessionDep, blog_id: UUID, author_id: RequestHeader
-):
+def delete_blog(session: SessionDep, blog_id: UUID, author_id: RequestHeader):
     blog = session.get(Blog, blog_id)
 
     if not blog:
@@ -106,16 +103,35 @@ def get_blogs(
     session: SessionDep,
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    author_id: Annotated[UUID | None, Query()] = None,
 ):
-    statement = select(Blog).limit(limit).offset(offset)
-    blogs = session.exec(statement).all()
+    blogs_query = (
+        select(Blog, func.count(Like.blog_id).label("likes"))
+        .outerjoin(Like, Blog.id == Like.blog_id)
+        .group_by(Blog.id)
+        .limit(limit)
+        .offset(offset)
+    )
 
-    total = session.exec(select(func.count()).select_from(Blog)).one()
+    blogs_count_query = select(func.count()).select_from(Blog)
+
+
+    if author_id is not None:
+        blogs_query = blogs_query.where(Blog.author_id == author_id)
+        blogs_count_query = blogs_count_query.where(Blog.author_id == author_id)
+
+    blogsWithLikesCount = session.exec(blogs_query).all()
+
+    total = session.exec(blogs_count_query).one()
+
+    items = [
+        {**blog.model_dump(), "likes": likes} for blog, likes in blogsWithLikesCount
+    ]
 
     return {
-        "items": blogs,
+        "items": items,
         "total": total,
         "limit": limit,
         "offset": offset,
-        "has_more": offset + len(blogs) < total,
+        "has_more": offset + len(blogsWithLikesCount) < total,
     }
