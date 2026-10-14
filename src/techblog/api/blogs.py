@@ -14,6 +14,8 @@ from ..models.blogs import (
     UpdateBlog,
 )
 from ..models.likes import Like
+from ..utilities.blogs import get_blog_by_blog_id
+from ..utilities.likes import get_likes_on_blog
 
 blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
@@ -37,15 +39,8 @@ def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
 
 @blogs_router.get("/{blog_id}", response_model=BlogWithLikesResponse)
 def get_blog(session: SessionDep, blog_id: UUID):
-    blog = session.get(Blog, blog_id)
-
-    if not blog:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
-        )
-
-    statement = select(func.count()).select_from(Like).where(Like.blog_id == blog.id)
-    likes = session.exec(statement).one()
+    blog = get_blog_by_blog_id(session, blog_id)
+    likes = get_likes_on_blog(session, blog_id)
     return BlogWithLikesResponse(**blog.model_dump(), likes=likes)
 
 
@@ -56,12 +51,7 @@ def update_blog(
     blog_id: UUID,
     author_id: RequestHeader,
 ):
-    blog = session.get(Blog, blog_id)
-
-    if not blog:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
-        )
+    blog = get_blog_by_blog_id(session, blog_id)
 
     if author_id != blog.author_id:
         raise HTTPException(
@@ -81,12 +71,7 @@ def update_blog(
 
 @blogs_router.delete("/{blog_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_blog(session: SessionDep, blog_id: UUID, author_id: RequestHeader):
-    blog = session.get(Blog, blog_id)
-
-    if not blog:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="blog not found!"
-        )
+    blog = get_blog_by_blog_id(session, blog_id)
 
     if author_id != blog.author_id:
         raise HTTPException(
@@ -98,40 +83,58 @@ def delete_blog(session: SessionDep, blog_id: UUID, author_id: RequestHeader):
     session.commit()
 
 
+from datetime import datetime
+
+
 @blogs_router.get("/")
 def get_blogs(
     session: SessionDep,
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     author_id: Annotated[UUID | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
+    created_after: Annotated[datetime | None, Query()] = None,
+    created_before: Annotated[datetime | None, Query()] = None,
 ):
     blogs_query = (
         select(Blog, func.count(Like.blog_id).label("likes"))
         .outerjoin(Like, Blog.id == Like.blog_id)
         .group_by(Blog.id)
-        .limit(limit)
-        .offset(offset)
     )
 
     blogs_count_query = select(func.count()).select_from(Blog)
-
 
     if author_id is not None:
         blogs_query = blogs_query.where(Blog.author_id == author_id)
         blogs_count_query = blogs_count_query.where(Blog.author_id == author_id)
 
-    blogsWithLikesCount = session.exec(blogs_query).all()
+    if search is not None:
+        blogs_query = blogs_query.where(Blog.title.ilike(f"%{search}%"))
+        blogs_count_query = blogs_count_query.where(Blog.title.ilike(f"%{search}%"))
 
+    if created_after is not None:
+        blogs_query = blogs_query.where(Blog.created_at >= created_after)
+        blogs_count_query = blogs_count_query.where(Blog.created_at >= created_after)
+
+    if created_before is not None:
+        blogs_query = blogs_query.where(Blog.created_at <= created_before)
+        blogs_count_query = blogs_count_query.where(Blog.created_at <= created_before)
+
+    blogs_query = (
+        blogs_query.order_by(Blog.created_at.desc(), Blog.id)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    blogs_response = session.exec(blogs_query).all()
     total = session.exec(blogs_count_query).one()
 
-    items = [
-        {**blog.model_dump(), "likes": likes} for blog, likes in blogsWithLikesCount
-    ]
+    items = [{**blog.model_dump(), "likes": likes} for blog, likes in blogs_response]
 
     return {
         "items": items,
         "total": total,
         "limit": limit,
         "offset": offset,
-        "has_more": offset + len(blogsWithLikesCount) < total,
+        "has_more": offset + len(blogs_response) < total,
     }

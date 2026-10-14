@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionDep
 from ..models.users import CreateUser, User, UserResponse
+from ..utilities.users import get_user_by_user_id
 
 users_router = APIRouter(prefix="/users", tags=["users"])
 
@@ -26,9 +27,4 @@ def add_user(session: SessionDep, data: CreateUser):
 
 @users_router.get("/{user_id}", response_model=UserResponse)
 def get_user(session: SessionDep, user_id: UUID):
-    user = session.get(User, user_id)
-
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found!")
-
-    return user
+    return get_user_by_user_id(session, user_id)
