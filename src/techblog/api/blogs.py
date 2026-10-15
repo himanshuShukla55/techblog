@@ -101,6 +101,7 @@ def get_blogs(
     created_after: Annotated[datetime | None, Query()] = None,
     created_before: Annotated[datetime | None, Query()] = None,
     min_likes: Annotated[int | None, Query(ge=0)] = None,
+    has_likes: Annotated[bool | None, Query()] = None,
 ):
     if (
         created_before is not None
@@ -132,6 +133,12 @@ def get_blogs(
 
     if min_likes is not None:
         blogs_query = blogs_query.having(func.count(Like.blog_id) >= min_likes)
+
+    if has_likes is not None:
+        if has_likes:
+            blogs_query = blogs_query.having(func.count(Like.blog_id) > 0)
+        else:
+            blogs_query = blogs_query.having(func.count(Like.blog_id) == 0)
 
     blogs_count_query = select(func.count()).select_from(blogs_query.subquery())
 
