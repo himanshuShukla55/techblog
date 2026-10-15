@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Annotated
+from datetime import datetime, timedelta
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
@@ -102,16 +102,19 @@ def get_blogs(
     created_before: Annotated[datetime | None, Query()] = None,
     min_likes: Annotated[int | None, Query(ge=0)] = None,
     has_likes: Annotated[bool | None, Query()] = None,
+    sort_by: Annotated[Literal["created_at", "likes"], Query()] = "created_at",
 ):
-    if (
-        created_before is not None
-        and created_after is not None
-        and created_before < created_after
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="invalid date range!",
-        )
+    if created_before is not None and created_after is not None:
+        if created_before < created_after:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="created_before cannot be less than created_after!",
+            )
+        elif (created_before - created_after).days > timedelta(days=365):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="difference b/w created_before and created_after cannot exceed 1 year!",
+            )
 
     blogs_query = (
         select(Blog, func.count(Like.blog_id).label("likes"))
@@ -143,7 +146,12 @@ def get_blogs(
     blogs_count_query = select(func.count()).select_from(blogs_query.subquery())
 
     blogs_query = (
-        blogs_query.order_by(Blog.created_at.desc(), Blog.id)
+        blogs_query.order_by(
+            Blog.created_at.desc()
+            if sort_by == "created_at"
+            else func.count(Like.blog_id).desc(),
+            Blog.id.desc(),
+        )
         .limit(limit)
         .offset(offset)
     )
