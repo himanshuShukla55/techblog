@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
+from pydantic import BeforeValidator
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
@@ -15,6 +17,7 @@ from ..models.blogs import (
 )
 from ..models.likes import Like
 from ..utilities.blogs import get_blog_by_blog_id
+from ..utilities.common import sanitise_string
 from ..utilities.likes import get_likes_on_blog
 
 blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
@@ -83,42 +86,54 @@ def delete_blog(session: SessionDep, blog_id: UUID, author_id: RequestHeader):
     session.commit()
 
 
-from datetime import datetime
+SearchQuery = Annotated[
+    str | None, BeforeValidator(sanitise_string), Query(min_length=3, max_length=100)
+]
 
 
 @blogs_router.get("/")
 def get_blogs(
     session: SessionDep,
     limit: int = Query(default=10, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=10000),
     author_id: Annotated[UUID | None, Query()] = None,
-    search: Annotated[str | None, Query()] = None,
+    search: SearchQuery = None,
     created_after: Annotated[datetime | None, Query()] = None,
     created_before: Annotated[datetime | None, Query()] = None,
+    min_likes: Annotated[int | None, Query(ge=0)] = None,
 ):
+    if (
+        created_before is not None
+        and created_after is not None
+        and created_before < created_after
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid date range!",
+        )
+
     blogs_query = (
         select(Blog, func.count(Like.blog_id).label("likes"))
         .outerjoin(Like, Blog.id == Like.blog_id)
         .group_by(Blog.id)
     )
 
-    blogs_count_query = select(func.count()).select_from(Blog)
-
     if author_id is not None:
         blogs_query = blogs_query.where(Blog.author_id == author_id)
-        blogs_count_query = blogs_count_query.where(Blog.author_id == author_id)
 
     if search is not None:
         blogs_query = blogs_query.where(Blog.title.ilike(f"%{search}%"))
-        blogs_count_query = blogs_count_query.where(Blog.title.ilike(f"%{search}%"))
 
     if created_after is not None:
         blogs_query = blogs_query.where(Blog.created_at >= created_after)
-        blogs_count_query = blogs_count_query.where(Blog.created_at >= created_after)
 
     if created_before is not None:
         blogs_query = blogs_query.where(Blog.created_at <= created_before)
-        blogs_count_query = blogs_count_query.where(Blog.created_at <= created_before)
+
+    if min_likes is not None:
+        blogs_query = blogs_query.having(func.count(Like.blog_id) >= min_likes)
+
+    blogs_count_query = select(func.count()).select_from(blogs_query.subquery())
 
     blogs_query = (
         blogs_query.order_by(Blog.created_at.desc(), Blog.id)
@@ -131,10 +146,15 @@ def get_blogs(
 
     items = [{**blog.model_dump(), "likes": likes} for blog, likes in blogs_response]
 
+    next_offset = offset + len(blogs_response)
+    has_more = next_offset < total
+    next_offset = next_offset if has_more else None
+
     return {
         "items": items,
         "total": total,
         "limit": limit,
         "offset": offset,
-        "has_more": offset + len(blogs_response) < total,
+        "has_more": has_more,
+        "next_offset": next_offset,
     }

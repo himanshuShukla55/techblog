@@ -6,7 +6,6 @@ from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import func, select
 
 from ..db import SessionDep
-from ..models.blogs import Blog
 from ..models.likes import Like, LikeResponse
 from ..utilities.blogs import get_blog_by_blog_id
 from ..utilities.users import get_user_by_user_id
