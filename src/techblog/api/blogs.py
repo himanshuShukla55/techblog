@@ -96,7 +96,7 @@ def get_blogs(
     session: SessionDep,
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=10000),
-    author_id: Annotated[UUID | None, Query()] = None,
+    authors_ids: Annotated[list[UUID] | None, Query()] = None,
     search: SearchQuery = None,
     created_after: Annotated[datetime | None, Query()] = None,
     created_before: Annotated[datetime | None, Query()] = None,
@@ -118,8 +118,8 @@ def get_blogs(
         .group_by(Blog.id)
     )
 
-    if author_id is not None:
-        blogs_query = blogs_query.where(Blog.author_id == author_id)
+    if authors_ids is not None:
+        blogs_query = blogs_query.where(Blog.author_id.in_(authors_ids))
 
     if search is not None:
         blogs_query = blogs_query.where(Blog.title.ilike(f"%{search}%"))
