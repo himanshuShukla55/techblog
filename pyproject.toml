@@ -19,9 +19,18 @@ dependencies = [
 [tool.fastapi]
 entrypoint = "techblog.main:app"
 
+[tool.pytest.ini_options]
+addopts = "-v"
+
 [project.scripts]
 techblog = "techblog:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+]

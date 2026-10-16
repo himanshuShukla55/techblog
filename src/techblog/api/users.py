@@ -1,17 +1,19 @@
-from uuid import UUID  # noqa: I001
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionDep
-from ..models.users import CreateUser, User, UserResponse, UpdateUser
-from ..utilities.users import get_user_by_user_id
+from ..models.users import CreateUser, UpdateUser, User, UserResponse
 from ..utilities.security import hash_password
+from ..utilities.users import get_user_by_user_id
 
 users_router = APIRouter(prefix="/users", tags=["users"])
 
 
-@users_router.post("/", response_model=UserResponse)
+@users_router.post(
+    "/", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 def add_user(session: SessionDep, data: CreateUser):
     try:
         user_data = data.model_dump(exclude={"password"})
