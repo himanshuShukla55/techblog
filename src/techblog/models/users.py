@@ -7,8 +7,8 @@ from sqlmodel import Field, SQLModel
 
 
 class BaseUser(SQLModel):
-    username: str = Field(min_length=3, max_length=50)
-    email: EmailStr
+    username: str = Field(min_length=3, max_length=50, unique=True)
+    email: EmailStr = Field(unique=True)
 
 
 class CreateUser(BaseUser):
@@ -24,8 +24,8 @@ class CreateUser(BaseUser):
 
 
 class UpdateUser(SQLModel):
-    username: str | None = Field(default=None, min_length=3, max_length=50)
-    email: EmailStr | None = None
+    username: str | None = Field(default=None, min_length=3, max_length=50, unique=True)
+    email: EmailStr | None = Field(default=None, unique=True)
     password: str | None = Field(default=None, min_length=8)
 
     @field_validator("username", "password")
