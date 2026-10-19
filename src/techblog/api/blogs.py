@@ -19,6 +19,7 @@ from ..models.likes import Like
 from ..utilities.blogs import get_blog_by_blog_id
 from ..utilities.common import sanitise_string
 from ..utilities.likes import get_likes_on_blog
+from ..utilities.security import UserFromToken
 
 blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
@@ -41,7 +42,7 @@ def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
 
 
 @blogs_router.get("/{blog_id}", response_model=BlogWithLikesResponse)
-def get_blog(session: SessionDep, blog_id: UUID):
+def get_blog(session: SessionDep, user: UserFromToken, blog_id: UUID):
     blog = get_blog_by_blog_id(session, blog_id)
     likes = get_likes_on_blog(session, blog_id)
     return BlogWithLikesResponse(**blog.model_dump(), likes=likes)

@@ -3,7 +3,7 @@ from sqlalchemy.exc import NoResultFound
 
 from ..db import SessionDep
 from ..models.users import LoginRequest
-from ..utilities.security import verify_password
+from ..utilities.security import create_access_token, verify_password
 from ..utilities.users import get_user_by_email
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
@@ -20,7 +20,7 @@ def login_user(session: SessionDep, data: LoginRequest):
                 detail="invalid user credentials",
             )
 
-        return {"message": "Login successful", "user_id": str(user.id)}
+        return {"access_token": create_access_token(str(user.id)), "token_type": "bearer"}
     except NoResultFound as _:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid user credentials"
