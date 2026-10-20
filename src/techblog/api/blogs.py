@@ -26,10 +26,12 @@ blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 RequestHeader = Annotated[UUID, Header()]
 
 
-@blogs_router.post("/{author_id}", response_model=BlogResponse)
-def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
+@blogs_router.post(
+    "/", response_model=BlogResponse, status_code=status.HTTP_201_CREATED
+)
+def add_blog(session: SessionDep, user: UserFromToken, data: CreateBlog):
     try:
-        blog = Blog(**data.model_dump(), author_id=author_id)
+        blog = Blog(**data.model_dump(), author_id=user.id)
         session.add(blog)
         session.commit()
         session.refresh(blog)
@@ -42,7 +44,7 @@ def add_blog(session: SessionDep, data: CreateBlog, author_id: UUID):
 
 
 @blogs_router.get("/{blog_id}", response_model=BlogWithLikesResponse)
-def get_blog(session: SessionDep, user: UserFromToken, blog_id: UUID):
+def get_blog(session: SessionDep, blog_id: UUID):
     blog = get_blog_by_blog_id(session, blog_id)
     likes = get_likes_on_blog(session, blog_id)
     return BlogWithLikesResponse(**blog.model_dump(), likes=likes)

@@ -3,9 +3,10 @@ from os import environ
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import decode, encode
+from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
 from ..db import SessionDep
@@ -23,9 +24,30 @@ Credentials = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 
 
 def verify_current_user(session: SessionDep, credentials: Credentials):
-    token = decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGO])
+    try:
+        token = decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGO])
+    except InvalidTokenError as _:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+        )
+    if "sub" not in token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+        )
+
     user_id = token["sub"]
-    return get_user_by_user_id(session, UUID(user_id))
+    try:
+        return get_user_by_user_id(session, UUID(user_id))
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+        )
+    except HTTPException as e:
+        if e.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+            )
+        raise
 
 
 UserFromToken = Annotated[User, Depends(verify_current_user)]
