@@ -1,38 +1,32 @@
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import func, select
 
 from ..db import SessionDep
 from ..models.likes import Like, LikeResponse
 from ..utilities.blogs import get_blog_by_blog_id
-from ..utilities.users import get_user_by_user_id
+from ..utilities.security import UserFromToken
 
 likes_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
-RequestHeader = Annotated[UUID, Header()]
-
 
 @likes_router.post("/{blog_id}/like", response_model=LikeResponse)
-def add_likes(session: SessionDep, blog_id: UUID, user_id: RequestHeader):
+def add_likes(session: SessionDep, user: UserFromToken, blog_id: UUID):
+    blog = get_blog_by_blog_id(session, blog_id)
+    new_like = Like(user_id=user.id, blog_id=blog.id)
+    session.add(new_like)
     try:
-        user = get_user_by_user_id(session, user_id)
-
-        blog = get_blog_by_blog_id(session, blog_id)
-
-        new_like = Like(user_id=user.id, blog_id=blog.id)
-        session.add(new_like)
         session.commit()
         session.refresh(new_like)
-        return new_like
     except IntegrityError as _:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="user cannot like the same blog twice!",
         )
+    return new_like
 
 
 @likes_router.get("/{blog_id}/likes")
@@ -49,23 +43,22 @@ def get_likes_on_blog(session: SessionDep, blog_id: UUID):
 
 
 @likes_router.delete("/{blog_id}/like", status_code=status.HTTP_204_NO_CONTENT)
-def remove_like_on_blog(session: SessionDep, blog_id: UUID, user_id: RequestHeader):
+def remove_like_on_blog(session: SessionDep, user: UserFromToken, blog_id: UUID):
+    blog = get_blog_by_blog_id(session, blog_id)
+    statement = select(Like).where(
+        Like.blog_id == blog.blog_id, Like.user_id == user.id
+    )
     try:
-        blog = get_blog_by_blog_id(session, blog_id)
-        statement = select(Like).where(
-            Like.blog_id == blog.blog_id, Like.user_id == user_id
-        )
-
         like = session.exec(statement).one()
-
-        session.delete(like)
-        session.commit()
-    except NoResultFound as _:
+    except NoResultFound:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="no like by user found on blog!",
         )
+
+    session.delete(like)
+    session.commit()
 
 
 @likes_router.get("/{blog_id}/likes/count")

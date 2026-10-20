@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BeforeValidator
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
@@ -23,24 +23,22 @@ from ..utilities.security import UserFromToken
 
 blogs_router = APIRouter(prefix="/blogs", tags=["blogs"])
 
-RequestHeader = Annotated[UUID, Header()]
-
 
 @blogs_router.post(
     "/", response_model=BlogResponse, status_code=status.HTTP_201_CREATED
 )
 def add_blog(session: SessionDep, user: UserFromToken, data: CreateBlog):
+    blog = Blog(**data.model_dump(), author_id=user.id)
+    session.add(blog)
     try:
-        blog = Blog(**data.model_dump(), author_id=user.id)
-        session.add(blog)
         session.commit()
         session.refresh(blog)
-        return blog
     except IntegrityError as _:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="author not found"
         )
+    return blog
 
 
 @blogs_router.get("/{blog_id}", response_model=BlogWithLikesResponse)
@@ -53,16 +51,16 @@ def get_blog(session: SessionDep, blog_id: UUID):
 @blogs_router.patch("/{blog_id}", response_model=BlogResponse)
 def update_blog(
     session: SessionDep,
+    user: UserFromToken,
     data: UpdateBlog,
     blog_id: UUID,
-    author_id: RequestHeader,
 ):
     blog = get_blog_by_blog_id(session, blog_id)
 
-    if author_id != blog.author_id:
+    if user.id != blog.author_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="user is forbidden to update this blog!",
+            detail="unauthorized action!",
         )
 
     updates = data.model_dump(exclude_unset=True)
@@ -76,10 +74,10 @@ def update_blog(
 
 
 @blogs_router.delete("/{blog_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_blog(session: SessionDep, blog_id: UUID, author_id: RequestHeader):
+def delete_blog(session: SessionDep, user: UserFromToken, blog_id: UUID):
     blog = get_blog_by_blog_id(session, blog_id)
 
-    if author_id != blog.author_id:
+    if user.id != blog.author_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="user is forbidden to delete this blog",

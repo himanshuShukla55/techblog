@@ -13,15 +13,15 @@ auth_router = APIRouter(prefix="/auth", tags=["auth"])
 def login_user(session: SessionDep, data: LoginRequest):
     try:
         user = get_user_by_email(session, data.email)
-
-        if not verify_password(data.password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="invalid user credentials",
-            )
-
-        return {"access_token": create_access_token(str(user.id)), "token_type": "bearer"}
-    except NoResultFound as _:
+    except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid user credentials"
         )
+
+    if not verify_password(data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid user credentials",
+        )
+
+    return {"access_token": create_access_token(str(user.id)), "token_type": "bearer"}
