@@ -28,11 +28,11 @@ def verify_current_user(session: SessionDep, credentials: Credentials):
         token = decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGO])
     except InvalidTokenError as _:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
     if "sub" not in token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
 
     user_id = token["sub"]
@@ -40,12 +40,12 @@ def verify_current_user(session: SessionDep, credentials: Credentials):
         return get_user_by_user_id(session, UUID(user_id))
     except (ValueError, TypeError):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
     except HTTPException as e:
         if e.status_code == status.HTTP_404_NOT_FOUND:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
             )
         raise
 

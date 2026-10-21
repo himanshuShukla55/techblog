@@ -21,8 +21,8 @@ def test_login_success(test_client):
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
 
-    assert "user_id" in body
-    assert body["message"] == "Login successful"
+    assert "access_token" in body
+    assert body["token_type"] == "bearer"
 
 
 def test_wrong_email_failed_login(test_client):
@@ -45,6 +45,7 @@ def test_wrong_email_failed_login(test_client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     body = response.json()
     assert body["detail"] == "invalid user credentials"
+
 
 def test_wrong_password_failed_login(test_client):
     client, _ = test_client

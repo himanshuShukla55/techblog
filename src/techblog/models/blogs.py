@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator, model_validator
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel
 
@@ -12,6 +12,7 @@ class CreateBlog(SQLModel):
 
 
 class UpdateBlog(SQLModel):
+    model_config = ConfigDict(extra="forbid")
     title: str | None = Field(default=None, max_length=100)
     body: str | None = Field(default=None, max_length=1000)
 
@@ -21,6 +22,16 @@ class UpdateBlog(SQLModel):
         if value is not None and not value.strip():
             raise ValueError("Title and body cannot be empty or whitespace")
         return value
+
+    @model_validator(mode="after")
+    def validate_not_empty(self):
+        if not self.model_fields_set:
+            raise ValueError("Update body cannot be empty!")
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+
+        return self
 
 
 class Blog(CreateBlog, table=True):
