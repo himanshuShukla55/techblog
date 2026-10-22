@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from fastapi import status
 from sqlmodel import Session, func, select
 
@@ -46,7 +44,7 @@ def test_failed_update_blog_due_to_wrong_token(
         username="test_user_2", email="test2@gmail.com", password="Password@2"
     )
 
-    token_two = authenticate_user(user_two)
+    _, token_two = authenticate_user(user_two)
     payload = {"title": "Test Blog Updated", "body": "adfasdf"}
 
     res = client.patch(f"/blogs/{blog['id']}", json=payload, headers=token_two)
@@ -59,12 +57,13 @@ def test_failed_update_blog_because_blog_does_not_exist(
 ):
     client, _ = get_client_connection
     authenticate_user = auth_factory
+    _, auth_header = authenticate_user()
 
     payload = {"title": "Changed Title"}
     res = client.patch(
         "/blogs/75d64418-ee42-4aa9-a5fb-04ab04252f4b",
         json=payload,
-        headers=authenticate_user(),
+        headers=auth_header,
     )
 
     assert res.status_code == status.HTTP_404_NOT_FOUND
@@ -74,11 +73,10 @@ def test_failed_update_blog_because_blog_does_not_exist(
 def test_success_update_blog(get_client_connection, auth_factory, blog_factory):
     client, _ = get_client_connection
     authenticate_user = auth_factory
+    _, auth_header = authenticate_user()
     _, blog = blog_factory
     payload = {"title": "Updated Title"}
-    res = client.patch(
-        f"/blogs/{blog['id']}", json=payload, headers=authenticate_user()
-    )
+    res = client.patch(f"/blogs/{blog['id']}", json=payload, headers=auth_header)
 
     assert res.status_code == status.HTTP_200_OK
 
@@ -91,9 +89,10 @@ def test_success_update_blog(get_client_connection, auth_factory, blog_factory):
 def test_delete_blog_success(get_client_connection, auth_factory, blog_factory):
     client, connection = get_client_connection
     authenticate_user = auth_factory
+    _, auth_header = authenticate_user()
     _, blog = blog_factory
 
-    res = client.delete(f"/blogs/{blog['id']}", headers=authenticate_user())
+    res = client.delete(f"/blogs/{blog['id']}", headers=auth_header)
 
     assert res.status_code == status.HTTP_204_NO_CONTENT
 
@@ -111,8 +110,9 @@ def test_failed_delete_blog_because_user_is_unauthorized(
     _, blog = blog_factory
 
     user = register_user("test_user_2", "test2@gmail.com", "Password@2")
+    _, auth_header = authenticate_user(user)
 
-    res = client.delete(f"/blogs/{blog['id']}", headers=authenticate_user(user))
+    res = client.delete(f"/blogs/{blog['id']}", headers=auth_header)
 
     assert res.status_code == status.HTTP_403_FORBIDDEN
     assert res.json()["detail"] == "user is forbidden to delete this blog"
@@ -125,9 +125,10 @@ def test_failed_delete_blog_because_user_is_unauthorized(
 def test_failed_delete_blog_because_blog_not_found(get_client_connection, auth_factory):
     client, _ = get_client_connection
     authenticate_user = auth_factory
+    _, auth_header = authenticate_user()
 
     res = client.delete(
-        "/blogs/75d64418-ee42-4aa9-a5fb-04ab04252f4b", headers=authenticate_user()
+        "/blogs/75d64418-ee42-4aa9-a5fb-04ab04252f4b", headers=auth_header
     )
 
     assert res.status_code == status.HTTP_404_NOT_FOUND

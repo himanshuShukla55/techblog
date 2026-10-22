@@ -61,7 +61,7 @@ def register_user_factory(get_client_connection):
         res = client.post("/users", json=payload)
 
         assert res.status_code == status.HTTP_201_CREATED
-        return payload
+        return {**payload, "id": res.json()["id"]}
 
     return register_user
 
@@ -81,7 +81,7 @@ def auth_factory(get_client_connection, register_user_factory):
         assert res.status_code == status.HTTP_200_OK
         token = res.json()["access_token"]
 
-        return {"Authorization": f"Bearer {token}"}
+        return user["id"], {"Authorization": f"Bearer {token}"}
 
     return authenticate_user
 
@@ -90,13 +90,24 @@ def auth_factory(get_client_connection, register_user_factory):
 def blog_factory(get_client_connection, auth_factory):
     client, _ = get_client_connection
     authenticate_user = auth_factory
-
+    _, auth_header = authenticate_user()
     payload = {"title": "Test Blog", "body": "This is the body of the Test Blog."}
 
-    res = client.post("/blogs", json=payload, headers=authenticate_user())
+    res = client.post("/blogs", json=payload, headers=auth_header)
 
     assert res.status_code == status.HTTP_201_CREATED
 
     return payload, res.json()
 
 
+@pytest.fixture
+def like_blog_factory(get_client_connection, blog_factory, auth_factory):
+    client, _ = get_client_connection
+    _, blog = blog_factory
+    authenticate_user = auth_factory
+    _, auth_header = authenticate_user()
+    res = client.post(f"/blogs/{blog['id']}/like", headers=auth_header)
+
+    assert res.status_code == status.HTTP_201_CREATED
+
+    return blog["id"], res.json()
