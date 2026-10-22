@@ -1,8 +1,8 @@
 from fastapi import status
 
 
-def test_login_success(test_client):
-    client, _ = test_client
+def test_login_success(get_client_connection):
+    client, _ = get_client_connection
 
     payload = {
         "username": "test user",
@@ -25,8 +25,8 @@ def test_login_success(test_client):
     assert body["token_type"] == "bearer"
 
 
-def test_wrong_email_failed_login(test_client):
-    client, _ = test_client
+def test_failed_login_due_to_wrong_email(get_client_connection):
+    client, _ = get_client_connection
 
     payload = {
         "username": "test user",
@@ -47,8 +47,8 @@ def test_wrong_email_failed_login(test_client):
     assert body["detail"] == "invalid user credentials"
 
 
-def test_wrong_password_failed_login(test_client):
-    client, _ = test_client
+def test_failed_login_due_to_wrong_password(get_client_connection):
+    client, _ = get_client_connection
 
     payload = {
         "username": "test user",

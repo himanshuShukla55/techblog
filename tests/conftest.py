@@ -13,7 +13,7 @@ if not database_url.endswith("/techblog_test"):
 
 
 @pytest.fixture
-def test_client():
+def get_client_connection():
     from fastapi.testclient import TestClient
     from sqlmodel import Session
 
@@ -45,8 +45,8 @@ def test_client():
 
 
 @pytest.fixture
-def register_user_factory(test_client):
-    client, _ = test_client
+def register_user_factory(get_client_connection):
+    client, _ = get_client_connection
 
     def register_user(
         username="test_user", email="test@gmail.com", password="Password@1"
@@ -67,8 +67,8 @@ def register_user_factory(test_client):
 
 
 @pytest.fixture
-def test_auth(test_client, register_user_factory):
-    client, _ = test_client
+def auth_factory(get_client_connection, register_user_factory):
+    client, _ = get_client_connection
     register_user = register_user_factory
     payload = register_user()
 
@@ -84,3 +84,19 @@ def test_auth(test_client, register_user_factory):
         return {"Authorization": f"Bearer {token}"}
 
     return authenticate_user
+
+
+@pytest.fixture
+def blog_factory(get_client_connection, auth_factory):
+    client, _ = get_client_connection
+    authenticate_user = auth_factory
+
+    payload = {"title": "Test Blog", "body": "This is the body of the Test Blog."}
+
+    res = client.post("/blogs", json=payload, headers=authenticate_user())
+
+    assert res.status_code == status.HTTP_201_CREATED
+
+    return payload, res.json()
+
+

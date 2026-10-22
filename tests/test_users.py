@@ -5,8 +5,8 @@ from techblog.models.users import User
 from techblog.utilities.security import verify_password
 
 
-def test_user_registration(test_client):
-    client, connection = test_client
+def test_user_registration(get_client_connection):
+    client, connection = get_client_connection
 
     password = "password@1"
 
@@ -38,8 +38,8 @@ def test_user_registration(test_client):
         assert verify_password(password, user.hashed_password)
 
 
-def test_fail_user_register_with_existing_email(test_client):
-    client, connection = test_client
+def test_fail_user_register_with_existing_email(get_client_connection):
+    client, connection = get_client_connection
 
     payload_first_user = {
         "username": "test_user_one",
@@ -65,8 +65,8 @@ def test_fail_user_register_with_existing_email(test_client):
         assert len(result) == 1
 
 
-def test_fail_duplicate_username_register(test_client):
-    client, connection = test_client
+def test_fail_duplicate_username_register(get_client_connection):
+    client, connection = get_client_connection
 
     payload_user_one = {
         "username": "test user",
