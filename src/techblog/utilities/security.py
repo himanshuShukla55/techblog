@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC, datetime, timedelta
 from os import environ
 from typing import Annotated
@@ -16,16 +17,20 @@ from .users import get_user_by_user_id
 password_hash = PasswordHash.recommended()
 bearer_scheme = HTTPBearer()
 
-JWT_SECRET_KEY = environ["JWT_SECRET_KEY"]
+ACCESS_JWT_SECRET_KEY = environ["ACCESS_JWT_SECRET_KEY"]
+REFRESH_JWT_SECRET_KEY = environ["REFRESH_JWT_SECRET_KEY"]
 JWT_ALGO = "HS256"
 JWT_EXP_TIME = 15
+REFRESH_EXP_TIME = 7
 
 Credentials = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 
 
 def verify_current_user(session: SessionDep, credentials: Credentials):
     try:
-        token = decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGO])
+        token = decode(
+            credentials.credentials, ACCESS_JWT_SECRET_KEY, algorithms=[JWT_ALGO]
+        )
     except InvalidTokenError as _:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
@@ -61,13 +66,34 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_hash.verify(plain_password, hashed_password)
 
 
-def create_access_token(user_id: str):
+def create_token(payload: dict, secret: str) -> str:
+    return encode(payload, secret, algorithm=JWT_ALGO)
+
+
+def create_access_token(user_id: str) -> str:
     current_time = datetime.now(UTC)
 
     payload = {
         "sub": user_id,
+        "type": "access",
         "iat": current_time,
         "exp": current_time + timedelta(minutes=JWT_EXP_TIME),
     }
 
-    return encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGO)
+    return create_token(payload, ACCESS_JWT_SECRET_KEY)
+
+
+def create_refresh_token(user_id: str) -> str:
+    current_time = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "iat": current_time,
+        "exp": current_time + timedelta(days=REFRESH_EXP_TIME),
+    }
+
+    return create_token(payload, REFRESH_JWT_SECRET_KEY)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
