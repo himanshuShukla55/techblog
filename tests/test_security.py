@@ -4,7 +4,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from jwt import decode
 from jwt.exceptions import InvalidSignatureError
+from sqlmodel import Session
 
+from techblog.models.refresh_tokens import RefreshToken
 from techblog.utilities.security import (
     ACCESS_JWT_SECRET_KEY,
     JWT_ALGO,
@@ -16,6 +18,7 @@ from techblog.utilities.security import (
     create_token,
     hash_password,
     hash_token,
+    save_refresh_token,
     verify_password,
 )
 
@@ -99,3 +102,15 @@ def test_token_hasing():
     hashed_token = hash_token(token)
     assert hmac.compare_digest(hashed_token, hash_token(token))
     assert token != hashed_token
+
+
+def test_save_refresh_token(get_client_connection):
+    _, connection = get_client_connection
+
+    refresh_token = create_refresh_token("user_123")
+    hashed_refresh_token = hash_token(refresh_token)
+    with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
+        save_refresh_token(session, hashed_refresh_token)
+        session.flush()
+
+        assert session.get(RefreshToken, hashed_refresh_token) is not None

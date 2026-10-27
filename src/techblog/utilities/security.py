@@ -9,8 +9,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import decode, encode
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from sqlmodel import Session
 
 from ..db import SessionDep
+from ..models.refresh_tokens import RefreshToken
 from ..models.users import User
 from .users import get_user_by_user_id
 
@@ -28,14 +30,8 @@ Credentials = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 
 def verify_current_user(session: SessionDep, credentials: Credentials):
     try:
-        token = decode(
-            credentials.credentials, ACCESS_JWT_SECRET_KEY, algorithms=[JWT_ALGO]
-        )
+        token = decode_access_token(credentials.credentials)
     except InvalidTokenError as _:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
-    if "sub" not in token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
         )
@@ -97,3 +93,34 @@ def create_refresh_token(user_id: str) -> str:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def save_refresh_token(session: Session, token_hash: str):
+    refresh_token = RefreshToken(token_hash=token_hash)
+    session.add(refresh_token)
+
+
+def decode_token(token: str, secret: str, token_type: str) -> dict:
+    payload = decode(token, secret, algorithms=[JWT_ALGO])
+    if payload.get("type") != token_type:
+        raise InvalidTokenError("Invalid token type")
+
+    user_id = payload.get("sub", None)
+
+    if not user_id or not isinstance(user_id, str):
+        raise InvalidTokenError("invalid token sub")
+
+    try:
+        UUID(user_id)
+    except ValueError:
+        raise InvalidTokenError("invalid token sub")
+
+    return payload
+
+
+def decode_access_token(token) -> dict:
+    return decode_token(token, ACCESS_JWT_SECRET_KEY, "access")
+
+
+def decode_refresh_token(token) -> dict:
+    return decode_token(token, REFRESH_JWT_SECRET_KEY, "refresh")
