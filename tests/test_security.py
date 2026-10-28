@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from jwt import decode
-from jwt.exceptions import InvalidSignatureError
+from jwt.exceptions import InvalidSignatureError, InvalidTokenError
 from sqlmodel import Session
 
 from techblog.models.refresh_tokens import RefreshToken
@@ -16,9 +16,11 @@ from techblog.utilities.security import (
     create_access_token,
     create_refresh_token,
     create_token,
+    decode_refresh_token,
     hash_password,
     hash_token,
     save_refresh_token,
+    validate_refresh_token,
     verify_password,
 )
 
@@ -114,3 +116,45 @@ def test_save_refresh_token(get_client_connection):
         session.flush()
 
         assert session.get(RefreshToken, hashed_refresh_token) is not None
+
+
+def test_success_decode_refresh_token():
+    user_id = "9e4cda96-bf42-4e08-b4a6-6d7d5c76f55b"
+    refresh_token = create_refresh_token(user_id)
+    decoded_refresh_token = decode_refresh_token(refresh_token)
+    assert decoded_refresh_token.get("sub") == user_id
+
+
+def test_failed_decode_refresh_token_when_token_type_is_not_refresh():
+    user_id = "9e4cda96-bf42-4e08-b4a6-6d7d5c76f55b"
+    token = create_access_token(user_id)
+
+    with pytest.raises(InvalidTokenError):
+        decode_refresh_token(token)
+
+
+def test_success_validate_refresh_token(get_client_connection):
+    _, connection = get_client_connection
+
+    user_id = "9e4cda96-bf42-4e08-b4a6-6d7d5c76f55b"
+    token = create_refresh_token(user_id)
+    hashed_token = hash_token(token)
+
+    with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
+        save_refresh_token(session, hashed_token)
+        session.flush()
+        sub = validate_refresh_token(session, token)
+        assert sub == user_id
+
+
+def test_failed_validate_refresh_token(get_client_connection):
+    _, connection = get_client_connection
+    user_id = "9e4cda96-bf42-4e08-b4a6-6d7d5c76f55b"
+
+    token = create_refresh_token(user_id)
+
+    with (
+        Session(bind=connection, join_transaction_mode="create_savepoint") as session,
+        pytest.raises(InvalidTokenError),
+    ):
+        validate_refresh_token(session, token)

@@ -2,7 +2,7 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from os import environ
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -82,6 +82,7 @@ def create_access_token(user_id: str) -> str:
 def create_refresh_token(user_id: str) -> str:
     current_time = datetime.now(UTC)
     payload = {
+        "jti": str(uuid4()),
         "sub": user_id,
         "type": "refresh",
         "iat": current_time,
@@ -118,9 +119,21 @@ def decode_token(token: str, secret: str, token_type: str) -> dict:
     return payload
 
 
-def decode_access_token(token) -> dict:
+def decode_access_token(token:str) -> dict:
     return decode_token(token, ACCESS_JWT_SECRET_KEY, "access")
 
 
-def decode_refresh_token(token) -> dict:
+def decode_refresh_token(token:str) -> dict:
     return decode_token(token, REFRESH_JWT_SECRET_KEY, "refresh")
+
+
+def validate_refresh_token(session: Session, token: str) -> str:
+    payload = decode_refresh_token(token)
+
+    hashed_token = hash_token(token)
+    db_token = session.get(RefreshToken, hashed_token)
+
+    if not db_token:
+        raise InvalidTokenError("invalid token")
+
+    return payload["sub"]
