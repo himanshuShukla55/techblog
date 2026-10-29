@@ -5,6 +5,7 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 
 from ..db import SessionDep
+from ..models.auth import LogoutRequest
 from ..models.refresh_tokens import (
     RefreshToken,
     RefreshTokenRequest,
@@ -12,6 +13,7 @@ from ..models.refresh_tokens import (
 )
 from ..models.users import LoginRequest
 from ..utilities.security import (
+    UserFromToken,
     create_access_token,
     create_refresh_token,
     hash_token,
@@ -85,3 +87,25 @@ def refresh_access_token(
         "refresh_token": refresh_token,
         "token_type": "bearer",
     }
+
+
+@auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout_user(session: SessionDep, user: UserFromToken, payload: LogoutRequest):
+    try:
+        user_id, db_token = validate_refresh_token(session, payload.refresh_token)
+    except InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized"
+        ) from exc
+
+    if str(user.id) != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized"
+        )
+
+    try:
+        session.delete(db_token)
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        raise

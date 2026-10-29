@@ -165,3 +165,32 @@ def test_failed_refresh_access_token_because_refresh_token_is_stale(
 
     assert res.status_code == status.HTTP_401_UNAUTHORIZED
     assert res.json().get("detail") == "invalid token"
+
+
+def test_success_logout_user(get_client_connection, register_user_factory):
+    client, connection = get_client_connection
+    register_user = register_user_factory
+
+    register_user()
+
+    payload = {"email": "test@gmail.com", "password": "Password@1"}
+
+    res = client.post("/auth", json=payload)
+
+    assert res.status_code == status.HTTP_200_OK
+    body = res.json()
+    access_token = body.get("access_token")
+    refresh_token = body.get("refresh_token")
+
+    assert access_token is not None
+    assert refresh_token is not None
+
+    auth_header = {"Authorization": f"bearer {access_token}"}
+    payload = {"refresh_token": refresh_token}
+
+    res = client.post("/auth/logout", headers=auth_header, json=payload)
+
+    assert res.status_code == status.HTTP_204_NO_CONTENT
+
+    with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
+        assert session.get(RefreshToken, hash_token(refresh_token)) is None
