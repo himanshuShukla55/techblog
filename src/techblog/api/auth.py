@@ -1,16 +1,21 @@
+from uuid import UUID
+
 from fastapi import APIRouter, HTTPException, status
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy.exc import NoResultFound
 
 from ..db import SessionDep
+from ..models.refresh_tokens import RefreshTokenRequest, RefreshTokenResponse
 from ..models.users import LoginRequest
 from ..utilities.security import (
     create_access_token,
     create_refresh_token,
     hash_token,
     save_refresh_token,
+    validate_refresh_token,
     verify_password,
 )
-from ..utilities.users import get_user_by_email
+from ..utilities.users import get_user_by_email, get_user_by_user_id
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,3 +45,25 @@ def login_user(session: SessionDep, data: LoginRequest):
         "refresh_token": refresh_token,
         "token_type": "bearer",
     }
+
+
+@auth_router.post("/refresh")
+def refresh_access_token(
+    session: SessionDep, payload: RefreshTokenRequest
+) -> RefreshTokenResponse:
+    try:
+        user_id = validate_refresh_token(session, payload.refresh_token)
+    except InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        ) from exc
+
+    try:
+        get_user_by_user_id(session, UUID(user_id))
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        ) from exc
+
+    access_token = create_access_token(user_id)
+    return {"access_token": access_token, "token_type": "bearer"}

@@ -1,14 +1,12 @@
 from fastapi import status
+from sqlmodel import Session
 
+from techblog.models.refresh_tokens import RefreshToken
 from techblog.utilities.security import (
     decode_access_token,
     decode_refresh_token,
     hash_token,
 )
-
-from sqlmodel import Session
-
-from techblog.models.refresh_tokens import RefreshToken
 
 
 def test_login_success(get_client_connection, register_user_factory):
@@ -67,3 +65,63 @@ def test_failed_login_due_to_wrong_password(
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     body = response.json()
     assert body["detail"] == "invalid user credentials"
+
+
+def test_auth_token_refresh_success(get_client_connection, register_user_factory):
+    client, _ = get_client_connection
+    register_user = register_user_factory
+    user = register_user()
+
+    payload = {"email": "test@gmail.com", "password": "Password@1"}
+
+    res = client.post("/auth", json=payload)
+
+    assert res.status_code == status.HTTP_200_OK
+    refresh_token = res.json().get("refresh_token")
+
+    assert refresh_token is not None
+
+    payload = {"refresh_token": refresh_token}
+
+    res = client.post("/auth/refresh", json=payload)
+
+    assert res.status_code == status.HTTP_200_OK
+
+    body = res.json()
+
+    assert "access_token" in body
+    assert "token_type" in body
+    assert body.get("token_type") == "bearer"
+
+    access_token = body.get("access_token")
+
+    assert decode_access_token(access_token).get("sub") == user.get("id")
+
+
+def test_refresh_access_token_failed_because_refresh_hash_not_found(
+    get_client_connection, register_user_factory
+):
+    client, connection = get_client_connection
+    register_user = register_user_factory
+    register_user()
+
+    payload = {"email": "test@gmail.com", "password": "Password@1"}
+
+    res = client.post("/auth", json=payload)
+
+    assert res.status_code == status.HTTP_200_OK
+    refresh_token = res.json().get("refresh_token")
+
+    assert refresh_token is not None
+
+    with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
+        db_token = session.get(RefreshToken, hash_token(refresh_token))
+        assert db_token is not None
+        session.delete(db_token)
+        session.commit()
+
+    payload = {"refresh_token": refresh_token}
+
+    res = client.post("/auth/refresh", json=payload)
+    assert res.status_code == status.HTTP_401_UNAUTHORIZED
+    assert res.json().get("detail") == "invalid token"
