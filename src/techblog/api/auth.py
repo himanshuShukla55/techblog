@@ -2,10 +2,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 from jwt.exceptions import InvalidTokenError
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 
 from ..db import SessionDep
-from ..models.refresh_tokens import RefreshTokenRequest, RefreshTokenResponse
+from ..models.refresh_tokens import (
+    RefreshToken,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
+)
 from ..models.users import LoginRequest
 from ..utilities.security import (
     create_access_token,
@@ -52,7 +56,7 @@ def refresh_access_token(
     session: SessionDep, payload: RefreshTokenRequest
 ) -> RefreshTokenResponse:
     try:
-        user_id = validate_refresh_token(session, payload.refresh_token)
+        user_id, db_token = validate_refresh_token(session, payload.refresh_token)
     except InvalidTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
@@ -66,4 +70,18 @@ def refresh_access_token(
         ) from exc
 
     access_token = create_access_token(user_id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(user_id)
+
+    try:
+        session.delete(db_token)
+        session.add(RefreshToken(token_hash=hash_token(refresh_token)))
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        raise
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }

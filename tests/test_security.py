@@ -143,7 +143,7 @@ def test_success_validate_refresh_token(get_client_connection):
     with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
         save_refresh_token(session, hashed_token)
         session.flush()
-        sub = validate_refresh_token(session, token)
+        sub, _ = validate_refresh_token(session, token)
         assert sub == user_id
 
 

@@ -136,4 +136,4 @@ def validate_refresh_token(session: Session, token: str) -> str:
     if not db_token:
         raise InvalidTokenError("invalid token")
 
-    return payload["sub"]
+    return payload["sub"], db_token
