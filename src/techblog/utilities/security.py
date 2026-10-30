@@ -31,18 +31,14 @@ Credentials = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 def verify_current_user(session: SessionDep, credentials: Credentials):
     try:
         token = decode_access_token(credentials.credentials)
-    except InvalidTokenError as _:
+    except InvalidTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+        ) from exc
 
     user_id = token["sub"]
     try:
         return get_user_by_user_id(session, UUID(user_id))
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
     except HTTPException as e:
         if e.status_code == status.HTTP_404_NOT_FOUND:
             raise HTTPException(
@@ -119,15 +115,15 @@ def decode_token(token: str, secret: str, token_type: str) -> dict:
     return payload
 
 
-def decode_access_token(token:str) -> dict:
+def decode_access_token(token: str) -> dict:
     return decode_token(token, ACCESS_JWT_SECRET_KEY, "access")
 
 
-def decode_refresh_token(token:str) -> dict:
+def decode_refresh_token(token: str) -> dict:
     return decode_token(token, REFRESH_JWT_SECRET_KEY, "refresh")
 
 
-def validate_refresh_token(session: Session, token: str) -> str:
+def validate_refresh_token(session: Session, token: str):
     payload = decode_refresh_token(token)
 
     hashed_token = hash_token(token)

@@ -194,3 +194,27 @@ def test_success_logout_user(get_client_connection, register_user_factory):
 
     with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
         assert session.get(RefreshToken, hash_token(refresh_token)) is None
+
+
+def test_failed_logout_because_refresh_token_is_passed_in_authorization_header(
+    get_client_connection, register_user_factory
+):
+    client, _ = get_client_connection
+    register_user = register_user_factory
+    register_user()
+
+    payload = {"email": "test@gmail.com", "password": "Password@1"}
+
+    res = client.post("/auth", json=payload)
+
+    assert res.status_code == status.HTTP_200_OK
+    refresh_token = res.json().get("refresh_token")
+    assert refresh_token is not None
+
+    auth_header = {"Authorization": f"bearer {refresh_token}"}
+    payload = {"refresh_token": refresh_token}
+
+    res = client.post("/auth/logout", headers=auth_header, json=payload)
+
+    assert res.status_code == status.HTTP_401_UNAUTHORIZED
+    assert res.json().get("detail") == "Not authenticated"
